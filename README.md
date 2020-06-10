@@ -47,7 +47,7 @@ This project will create a CodePipeline project that performs the following step
 First, clone this repository to your local machine using a command like below:
 
 ```sh
-$ git clone ${THIS_REPOSITORY_URL}
+$ git clone https://github.com/aws-samples/aws-stepfunction-cicd-pipeline-example.git
 ```
 
 ### Create AWS CodeCommit Repository
