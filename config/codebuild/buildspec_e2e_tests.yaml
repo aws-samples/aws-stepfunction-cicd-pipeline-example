@@ -1,0 +1,26 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+version: 0.2
+env:
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+    commands:
+      - pip3 install -r tests/requirements.txt
+
+  build:
+    commands:
+      - pytest -vvv -s tests/e2e --junitxml=reports/e2e.xml
+
+artifacts:
+  files:
+    - "**/*"
+
+reports:
+  E2ETestReports:
+    files:
+      - "**/*"
+    base-directory: "reports"

@@ -1,0 +1,663 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Creates a CodePipeline Project with all associated CodeBuild, CloudFormation, and Approvals
+
+Parameters:
+  StateMachineName:
+    Description: The Production name of the State Machine
+    Type: String
+    Default: CalculationStateMachine
+  CodeCommitRepository:
+    Description: The name of the CodeCommit Repository where configurations are located
+    Type: String
+    Default: CalculationStateMachine
+  CodeCommitBranch:
+    Description: The CodeCommit Branch to use
+    Type: String
+    Default: master
+  ProductionApprovalEmail:
+    Description: The email address to send production deployment approval to
+    Type: String
+
+Resources:
+  SNSApprovalTopic:
+    Type: AWS::SNS::Topic
+  SNSEmailSubscriber:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref ProductionApprovalEmail
+      TopicArn: !Ref SNSApprovalTopic
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "CodeCommitPull-${AWS::StackName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codebuild:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - lambda:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - iam:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codecommit:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - states:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:CreateLogGroup
+                  - logs:PutLogEvents
+                Resource: "*"
+  CustomResourceLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      Path: /
+      Policies:
+        - PolicyName: allow-logs
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:*
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ssm:PutObject
+                  - ssm:GetObject
+                  - ssm:GetObjectVersion
+                Resource: "*"
+  Base64Decode:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python2.7
+      Timeout: 60
+      Handler: index.handler
+      Role:
+        Fn::GetAtt:
+          - "CustomResourceLambdaExecutionRole"
+          - "Arn"
+      Code:
+        ZipFile: |
+          import base64
+          import json
+          import cfnresponse
+          def handler(event, context):
+            responseValue = base64.b64decode(event['ResourceProperties'].get('Base64', "")).decode('utf-8')
+            responseData = {}
+            responseData['Json'] = responseValue
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, "CustomResourceBase64")
+  GetJson:
+    Type: Custom::Base64Decode
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+          - "Base64Decode"
+          - "Arn"
+      Base64: "{{resolve:ssm:StateMachineLambdaFunctions:1}}"
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "CodePipeline-${AWS::StackName}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - logs:CreateLogStream
+                  - iam:PassRole
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - codecommit:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource: "*"
+
+  CodePipelineCFMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "CodePipeline-${AWS::StackName}-CFM"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                  - logs:CreateLogStream
+                  - cloudformation:CreateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeStacks
+                  - iam:CreateRole
+                  - iam:*
+                  - states:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource: "*"
+
+  CodePipelineArtifactKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS Key for ${AWS::StackName}"
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Id: key-consolepolicy-3
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+          - Sid: Allow access for Key Administrators
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt CodePipelineRole.Arn
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: "*"
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt CodePipelineRole.Arn
+                - !GetAtt CodeBuildRole.Arn
+                - !GetAtt CodePipelineCFMRole.Arn
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt CodePipelineRole.Arn
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: "*"
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: "true"
+
+  CodePipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref CodePipelineArtifactKMSKey
+
+  LambdaSAMCodeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+
+  CodeBuildLintProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_lint_test.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+      Name: !Sub "${AWS::StackName}-Lint"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildUnitTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_unit_tests.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+      Name: !Sub "${AWS::StackName}-Unit-Tests"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildDeployStageLambdaFunctions:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_deploy_stage_lambda_functions.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: SAM_BUILD_BUCKET
+            Value: !Ref LambdaSAMCodeBucket
+          - Name: S3_PREFIX
+            Value: "lambda-stage"
+          - Name: LAMBDA_DEPLOYER_STACK_NAME
+            Value: !Sub "${AWS::StackName}-Lambda-Deployer-Stage"
+          - Name: LAMBDA_FUNCTION_NAMES_JSON
+            Value: !GetAtt GetJson.Json
+      Name: !Sub "${AWS::StackName}-Deploy-Lambda-Functions-Stage"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildDeployProductionLambdaFunctions:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/bbuildspec_deploy_prod_lambda_functions.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: SAM_BUILD_BUCKET
+            Value: !Ref LambdaSAMCodeBucket
+          - Name: S3_PREFIX
+            Value: "lambda-production"
+          - Name: LAMBDA_DEPLOYER_STACK_NAME
+            Value: !Sub "${AWS::StackName}-Lambda-Deployer-Production"
+          - Name: LAMBDA_FUNCTION_NAMES_JSON
+            Value: !GetAtt GetJson.Json
+      Name: !Sub "${AWS::StackName}-Deploy-Production"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildTemplateStateMachineCFMStage:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_template_cfm.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: Lambda_Func
+            Value: !GetAtt GetJson.Json
+          - Name: Environment
+            Value: Stage
+      Name: !Sub "${AWS::StackName}-Template-Stage-Cloudformation"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildTemplateStateMachineCFMProduction:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_template_cfm.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: Lambda_Func
+            Value: !GetAtt GetJson.Json
+          - Name: Environment
+            Value: Prod
+      Name: !Sub "${AWS::StackName}-Template-Prod-Cloudformation-Template"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildE2ETestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: config/codebuild/buildspec_e2e_tests.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: AWS_REGION
+            Value: !Ref "AWS::Region"
+          - Name: STATE_MACHINE_NAME
+            Value: !Ref StateMachineName
+      Name: !Sub "${AWS::StackName}-E2E-Tests"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodeBuildDeployProductionPipeline:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:2.0
+        Type: LINUX_CONTAINER
+      Name: !Sub "${AWS::StackName}-Deploy-Production-Pipeline"
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+
+  CodePipelineProject:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        EncryptionKey:
+          Id: !Ref CodePipelineArtifactKMSKey
+          Type: KMS
+        Location: !Ref CodePipelineArtifactBucket
+        Type: S3
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: "1"
+              Configuration:
+                BranchName: !Ref CodeCommitBranch
+                RepositoryName: !Ref CodeCommitRepository
+              OutputArtifacts:
+                - Name: SourceCode
+        - Name: SourceLint
+          Actions:
+            - Name: SourceLint
+              InputArtifacts:
+                - Name: SourceCode
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildLintProject
+        - Name: Unit-Tests
+          Actions:
+            - Name: Unit-Tests
+              InputArtifacts:
+                - Name: SourceCode
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildUnitTestProject
+        - Name: Deploy-Lambda-Functions-Stage
+          Actions:
+            - Name: Deploy-Lambda-Functions-Stage
+              InputArtifacts:
+                - Name: SourceCode
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildDeployStageLambdaFunctions
+        - Name: Template-Stage-Cloudformation
+          Actions:
+            - Name: Template-Stage-Cloudformation
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: TransformedSourceCodeStage
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildTemplateStateMachineCFMStage
+        - Name: DeployStagePipeline
+          Actions:
+            - Name: DeployStagePipeline
+              InputArtifacts:
+                - Name: TransformedSourceCodeStage
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                StackName: !Sub "${StateMachineName}-Stage"
+                TemplatePath: TransformedSourceCodeStage::sm_cfm.json
+                ActionMode: CREATE_UPDATE
+                RoleArn: !GetAtt CodePipelineCFMRole.Arn
+                Capabilities: CAPABILITY_IAM
+                ParameterOverrides: !Sub '{"StateMachineName": "${StateMachineName}-Test"}'
+        - Name: E2E-Tests
+          Actions:
+            - Name: E2E-Tests
+              InputArtifacts:
+                - Name: TransformedSourceCodeStage
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildE2ETestProject
+        - Name: ProductionApproval
+          Actions:
+            - Name: ProductionApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+        - Name: DestroyStagePipeline
+          Actions:
+            - Name: DestroyStagePipeline
+              InputArtifacts:
+                - Name: TransformedSourceCodeStage
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                StackName: !Sub "${StateMachineName}-Stage"
+                ActionMode: DELETE_ONLY
+                RoleArn: !GetAtt CodePipelineCFMRole.Arn
+                Capabilities: CAPABILITY_IAM
+                ParameterOverrides: !Sub '{"StateMachineName": "${StateMachineName}"}'
+        - Name: Template-Prod-Cloudformation-Template
+          Actions:
+            - Name: Template-Prod-Cloudformation-Template
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: TransformedSourceCodeProduction
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildTemplateStateMachineCFMProduction
+        - Name: Deploy-Production-Lambda-Functions
+          Actions:
+            - Name: Deploy-Production-Lambda-Functions
+              InputArtifacts:
+                - Name: TransformedSourceCodeProduction
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              Configuration:
+                ProjectName: !Ref CodeBuildDeployProductionLambdaFunctions
+        - Name: DeployProductionPipeline
+          Actions:
+            - Name: DeployProductionPipeline
+              InputArtifacts:
+                - Name: TransformedSourceCodeProduction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                StackName: !Sub "${StateMachineName}-Production"
+                ActionMode: CREATE_UPDATE
+                RoleArn: !GetAtt CodePipelineCFMRole.Arn
+                Capabilities: CAPABILITY_IAM
+                TemplatePath: TransformedSourceCodeProduction::sm_cfm.json
+                ParameterOverrides: !Sub '{"StateMachineName": "${StateMachineName}"}'
+  TopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref "SNSApprovalTopic"
+      PolicyDocument:
+        Version: "2008-10-17"
+        Id: __default_policy_ID
+        Statement:
+          - Sid: __default_statement_ID
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource:
+              - !Ref "SNSApprovalTopic"
+            Condition:
+              StringEquals:
+                AWS:SourceOwner:
+                  - !Ref "AWS::AccountId"
+          - Sid: TrustCWEToPublishEventsToMyTopic
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sns:Publish
+            Resource:
+              - !Ref "SNSApprovalTopic"

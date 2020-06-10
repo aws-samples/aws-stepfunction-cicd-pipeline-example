@@ -1,0 +1,17 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+version: 0.2
+env:
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      ruby: 2.6
+    commands:
+      - yum -y install rubygems
+      - gem install statelint
+
+  build:
+    commands:
+      - statelint sm_def.json

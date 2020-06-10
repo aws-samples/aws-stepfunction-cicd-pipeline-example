@@ -1,0 +1,80 @@
+## Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+## SPDX-License-Identifier: MIT-0
+
+{
+  "Comment": "CalculationStateMachine",
+  "StartAt": "CleanInput",
+  "States": {
+    "CleanInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "{{CleanInput}}",
+        "Payload": {
+          "input.$": "$"
+        }
+      },
+      "Next": "Multiply"
+    },
+    "Multiply": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "{{Multiply}}",
+        "Payload": {
+          "input.$": "$.Payload"
+        }
+      },
+      "Next": "Choice"
+    },
+    "Choice": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Payload.result",
+          "NumericGreaterThanEquals": 20,
+          "Next": "Subtract"
+        }
+      ],
+      "Default": "Fail"
+    },
+    "Subtract": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "{{Subtract}}",
+        "Payload": {
+          "input.$": "$.Payload"
+        }
+      },
+      "Next": "Add"
+    },
+    "Fail": {
+      "Type": "Fail",
+      "Cause": "Number Too Small",
+      "Error": "NumberTooSmallError"
+    },
+    "Add": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "{{Add}}",
+        "Payload": {
+          "input.$": "$.Payload"
+        }
+      },
+      "Next": "Divide"
+    },
+    "Divide": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "{{Divide}}",
+        "Payload": {
+          "input.$": "$.Payload"
+        }
+      },
+      "End": true
+    }
+  }
+}

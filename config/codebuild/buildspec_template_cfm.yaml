@@ -1,0 +1,19 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+version: 0.2
+env:
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+    commands:
+      - pip3 install -r requirements.txt
+
+  build:
+    commands:
+      - python template_statemachine_cf.py
+artifacts:
+  files:
+    - "**/*"

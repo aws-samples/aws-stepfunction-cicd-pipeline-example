@@ -1,0 +1,80 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Description: Creates all lambda functions needed for the Step Function state machine execution
+
+Parameters:
+  CleanInputFunctionName:
+    Description: The name of the Clean Input Lambda Function
+    Type: String
+  MultiplyFunctionName:
+    Description: The name of the Multiply Lambda Function
+    Type: String
+  AddFunctionName:
+    Description: The name of the Add Lambda Function
+    Type: String
+  SubtractFunctionName:
+    Description: The name of the Subtract Lambda Function
+    Type: String
+  DivideFunctionName:
+    Description: The name of the Divide Lambda Function
+    Type: String
+
+Resources:
+  CleanInputLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: cleaninput.lambda_handler
+      Runtime: python3.7
+      CodeUri: lambdas/cleaninput
+      FunctionName: !Ref CleanInputFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  MultiplyLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: multiply.lambda_handler
+      Runtime: python3.7
+      CodeUri: lambdas/multiply
+      FunctionName: !Ref MultiplyFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  AddLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: add.lambda_handler
+      Runtime: python3.7
+      CodeUri: lambdas/add
+      FunctionName: !Ref AddFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  SubtractLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: subtract.lambda_handler
+      Runtime: python3.7
+      CodeUri: lambdas/subtract
+      FunctionName: !Ref SubtractFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30
+
+  DivideLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: divide.lambda_handler
+      Runtime: python3.7
+      CodeUri: lambdas/divide
+      FunctionName: !Ref DivideFunctionName
+      AutoPublishAlias: live
+      MemorySize: 128
+      Timeout: 30

@@ -1,0 +1,22 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+version: 0.2
+env:
+  git-credential-helper: yes
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+    commands:
+      - pip3 install -r tests/requirements.txt
+
+  build:
+    commands:
+      - pytest -s -vvv tests/unit/ --junitxml=reports/unit.xml
+
+reports:
+  StateMachineReports:
+    files:
+      - "**/*"
+    base-directory: "reports"

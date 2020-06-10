@@ -1,0 +1,39 @@
+# Copyright 2020 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.8
+      docker: 18
+  build:
+    commands:
+      - echo "Gathering and Setting  Lambda Function Environment Variables"
+      - export CLEANINPUT_LAMBDA_NAME=$(echo ${LAMBDA_FUNCTION_NAMES_JSON} | python -c 'import json,sys; print(json.load(sys.stdin)["Prod"][0]["CLEANINPUT_FUNCTION"])')
+      - export MULTIPLY_LAMBDA_NAME=$(echo ${LAMBDA_FUNCTION_NAMES_JSON} | python -c 'import json,sys; print(json.load(sys.stdin)["Prod"][0]["MULTIPLY_FUNCTION"])')
+      - export ADD_LAMBDA_NAME=$(echo ${LAMBDA_FUNCTION_NAMES_JSON} | python -c 'import json,sys; print(json.load(sys.stdin)["Prod"][0]["ADD_FUNCTION"])')
+      - export SUBTRACT_LAMBDA_NAME=$(echo ${LAMBDA_FUNCTION_NAMES_JSON} | python -c 'import json,sys; print(json.load(sys.stdin)["Prod"][0]["SUBTRACT_FUNCTION"])')
+      - export DIVIDE_LAMBDA_NAME=$(echo ${LAMBDA_FUNCTION_NAMES_JSON} | python -c 'import json,sys; print(json.load(sys.stdin)["Prod"][0]["DIVIDE_FUNCTION"])')
+
+      - echo "Running a SAM Build command"
+      - sam build -b ./build -s . -t cloudformation/lambda_deployer.yaml -u
+
+      - echo "Running a SAM Package Command"
+      - >
+        sam package
+        --template-file build/template.yaml
+        --s3-bucket ${SAM_BUILD_BUCKET}
+        --s3-prefix ${S3_PREFIX}
+        --output-template-file build/packaged.yaml
+
+      - echo "Running a SAM Deploy Command"
+      - >
+        sam deploy
+        --template-file build/packaged.yaml
+        --stack-name ${LAMBDA_DEPLOYER_STACK_NAME}
+        --capabilities CAPABILITY_NAMED_IAM
+        --s3-prefix ${S3_PREFIX}
+        --parameter-overrides CleanInputFunctionName=${CLEANINPUT_LAMBDA_NAME} MultiplyFunctionName=${MULTIPLY_LAMBDA_NAME}
+        AddFunctionName=${ADD_LAMBDA_NAME} SubtractFunctionName=${SUBTRACT_LAMBDA_NAME} DivideFunctionName=${DIVIDE_LAMBDA_NAME}
