@@ -8,7 +8,7 @@ This project shows you how to use AWS CodePipeline, AWS CodeBuild, and Serverles
 
 ## Solution Overview
 
-![architecture](src/images/architecture.png)
+![architecture](images/architecture.png)
 
 This project will create a CodePipeline project that performs the following steps:
 
@@ -56,7 +56,7 @@ Navigate to the AWS console and search for `CodeCommit`. Once on this page, clic
 
 Create a new repository with the name of `CalculationStateMachine`, as seen below:
 
-![create repository](src/images/codecommit_repository.png)
+![create repository](images/codecommit_repository.png)
 
 ### Push Repository Code
 
