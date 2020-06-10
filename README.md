@@ -180,3 +180,7 @@ $ echo -n $VAL | openssl base64
 ## Lambda Deployer SAM Template
 
 There is a [SAM Template](cloudformation/lambda_deployer.yaml) which will get used in one of the CodeBuild steps to deploy all of the Lambda Functions. This will use an All-at-Once deployment approach and will set up all of the necessary Lambda Versions, Lambda Aliases, and appropriate Lambda Functions.
+
+## License
+
+This library is licensed under the MIT-0 License. See the LICENSE file.
