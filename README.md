@@ -112,7 +112,7 @@ This command above will create a new SSM entry with the Base64 Encoded value of 
 
 ### Bootstrap Pipeline CloudFormation Template
 
-The CloudFormation template for bootstrapping the CodePipeline project is located at [codepipeline_ci_cd.yaml](src/cloudformation/codepipeline_ci_cd.yaml)
+The CloudFormation template for bootstrapping the CodePipeline project is located at [codepipeline_ci_cd.yaml](cloudformation/codepipeline_ci_cd.yaml)
 
 Now that you have created the CodeCommit repository and the Systems Manager Parameter Store value you are ready to create the CloudFormation stack to set up the following resources:
 
@@ -124,7 +124,7 @@ Now that you have created the CodeCommit repository and the Systems Manager Para
 - SNS Production Approval Topic and email subscriber
 - KMS CodePipeline encryption key
 
-![ci_cd_pipeline](src/images/cloudformation_pipeline.png)
+![ci_cd_pipeline](images/cloudformation_pipeline.png)
 
 The CloudFormation stack can be created via the CLI or the AWS console.
 
@@ -133,12 +133,12 @@ _NOTE:_ you will need to accept the SNS topic subscription via the email that ge
 ### Create Stack using the AWS CLI (option 1)
 
 ```sh
-$ aws cloudformation deploy --template-file src/cloudformation/codepipeline_ci_cd.yaml --stack-name step-function-cicd-pipeline --parameter-overrides ProductionApprovalEmail=example@myemail.com StateMachineName=CalculationStateMachine CodeCommitRepository=CalculationStateMachine CodeCommitBranch=master
+$ aws cloudformation deploy --template-file cloudformation/codepipeline_ci_cd.yaml --stack-name step-function-cicd-pipeline --parameter-overrides ProductionApprovalEmail=example@myemail.com StateMachineName=CalculationStateMachine CodeCommitRepository=CalculationStateMachine CodeCommitBranch=master
 ```
 
 ### Create Stack using the AWS Console (option 2)
 
-Navigate to the AWS Console and then to CloudFormation. Once here, upload the template `src/cloudformation/codepipeline_ci_cd.yaml` and then provide the parameters or override the existing default values.
+Navigate to the AWS Console and then to CloudFormation. Once here, upload the template `cloudformation/codepipeline_ci_cd.yaml` and then provide the parameters or override the existing default values.
 
 ### CodePipeline CloudFormation Parameters
 
