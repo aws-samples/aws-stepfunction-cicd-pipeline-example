@@ -367,7 +367,7 @@ Resources:
         Type: CODEPIPELINE
       Source:
         Type: CODEPIPELINE
-        BuildSpec: config/codebuild/bbuildspec_deploy_prod_lambda_functions.yaml
+        BuildSpec: config/codebuild/buildspec_deploy_prod_lambda_functions.yaml
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         PrivilegedMode: true
