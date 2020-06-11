@@ -185,3 +185,8 @@ There is a [SAM Template](cloudformation/lambda_deployer.yaml) which will get us
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
 
+## Contributors
+
+- Matt Noyce
+- Viyoma Sachdeva
+- Srihari Prabaharan
