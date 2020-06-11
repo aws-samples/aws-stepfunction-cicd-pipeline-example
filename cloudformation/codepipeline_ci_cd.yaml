@@ -437,7 +437,7 @@ Resources:
           - Name: AWS_REGION
             Value: !Ref "AWS::Region"
           - Name: STATE_MACHINE_NAME
-            Value: !Ref StateMachineName
+            Value: !Sub "${StateMachineName}-Test"
       Name: !Sub "${AWS::StackName}-E2E-Tests"
       ServiceRole: !GetAtt CodeBuildRole.Arn
 

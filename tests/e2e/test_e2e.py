@@ -15,7 +15,7 @@ def test_successful_execution():
 
     # start the state machine
     pipeline_metadata = client.start_pipeline_synchronous(
-        name=f"{state_machine_name}-Stage",
+        name=f"{state_machine_name}",
         input='{\"input\": \"1 20 3\"}'
     )
 
