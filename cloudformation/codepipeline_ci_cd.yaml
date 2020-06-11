@@ -180,6 +180,10 @@ Resources:
                 Action:
                   - cloudformation:*
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - SNS:Publish
+                Resource: !Ref SNSApprovalTopic
 
   CodePipelineCFMRole:
     Type: AWS::IAM::Role
@@ -566,6 +570,8 @@ Resources:
                 Owner: AWS
                 Provider: Manual
                 Version: "1"
+              Configuration:
+                NotificationArn: !Ref SNSApprovalTopic
         - Name: DestroyStagePipeline
           Actions:
             - Name: DestroyStagePipeline
